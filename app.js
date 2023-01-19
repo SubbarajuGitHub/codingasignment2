@@ -32,7 +32,7 @@ const initializeDbAndServer = async () => {
 };
 initializeDbAndServer();
 
-//Security
+// Security Token
 
 const authenticateToken = (request, response, next) => {
   let jwtToken;
@@ -56,45 +56,48 @@ const authenticateToken = (request, response, next) => {
   }
 };
 
-//API 1 Register New User
+//API 1 Register
 
 app.post("/register/", async (request, response) => {
-  const { username, name, password, gender } = request.body;
+  const { username, password, name, gender } = request.body;
   const hashedPassword = await bcrypt.hash(password, 10);
-  const CheckQuery = `
-    SELECT
-    *
-    FROM
-    user
-    WHERE username="${username}"`;
-  const dbUser = await database.get(CheckQuery);
-  if (dbUser === undefined) {
-    if (password.length < 6) {
+  const CheckUser = `
+  SELECT
+  *
+  FROM
+  user
+  WHERE
+  username="${username}"
+  `;
+  const GetUserDetails = await database.get(CheckUser);
+  if (GetUserDetails !== undefined) {
+    response.status(400);
+    response.send("User already exists");
+  } else {
+    const PasswordLength = password.length;
+    if (PasswordLength < 6) {
       response.status(400);
       response.send("Password is too short");
     } else {
-      const createUserQuery = `
-            INSERT INTO 
-            user (username, name, password, gender, location) 
-            VALUES 
-        (
-          '${username}', 
+      const UpdateDetails = `
+          INSERT INTO user
+          (name,username,password,gender)
+          VALUES
+          ( 
           '${name}',
+          '${username}',
           '${hashedPassword}', 
-          '${gender}',
-          '${location}'
-        )`;
-      const dbResponse = await database.run(createUserQuery);
+          '${gender}'
+        )
+          `;
+      const GetUpdatedDetails = await database.run(UpdateDetails);
       response.status(200);
       response.send("User created successfully");
     }
-  } else {
-    response.status(400);
-    response.send("User already exists");
   }
 });
 
-//API 2 LOGIN
+//API 2 Login
 
 app.post("/login/", async (request, response) => {
   const { username, password } = request.body;
@@ -130,19 +133,12 @@ app.post("/login/", async (request, response) => {
   }
 });
 
-//API 3
+// API 3
 
-app.get("/user/tweets/feed/", async (request, response) => {
+app.get("/user/tweets/feed/", authenticateToken, async (request, response) => {
   const { username } = request;
-
-  const user_id = `
-  SELECT user_id
-  FROM
-  user
-  WHERE
-  username="${username}"
-  `;
-  const userId = await database.get(user_id);
+  const selectUserQuery = `SELECT * FROM user WHERE username = '${username}'`;
+  const userDetails = await database.get(selectUserQuery);
 
   const tweetsQuery = `
   SELECT
@@ -154,10 +150,12 @@ app.get("/user/tweets/feed/", async (request, response) => {
   INNER JOIN user
     ON tweet.user_id = user.user_id
   WHERE
-    follower.follower_user_id = ${userId}
+    follower.follower_user_id = ${UserDetails.userId}
   ORDER BY
     tweet.date_time DESC
   LIMIT 4;`;
+  const last = await database.get(tweetsQuery);
+  response.send(last);
 });
 
 module.exports = app;
